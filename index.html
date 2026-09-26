@@ -94,7 +94,7 @@ async function checkRain() {
   // The decision
   let emoji, verdict;
   if (worst < 20)      { emoji = "🏍️"; verdict = "Ride today!"; }
-  else if (worst < 50) { emoji = "🌦️"; verdict = "it may rain – use waterproofs"; }
+  else if (worst < 50) { emoji = "🌦️"; verdict = "It may rain – use waterproofs"; }
   else                 { emoji = "🌧️"; verdict = "Rain likely – work from home"; }
 
   document.getElementById("emoji").textContent = emoji;
