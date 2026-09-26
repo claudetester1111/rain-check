@@ -11,6 +11,8 @@
          background: #f4f6f8; color: #1d2530; text-align: center; }
   .card { background: #fff; border-radius: 16px; padding: 20px; margin: 0 auto 16px;
           max-width: 420px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  #date { font-weight: 600; }
+  #place { opacity: .75; margin-bottom: 8px; }
   #emoji { font-size: 72px; }
   #verdict { font-size: 28px; font-weight: 700; margin: 8px 0; }
   #detail { opacity: .75; }
@@ -33,6 +35,8 @@
 <body>
 
 <div class="card">
+  <div id="date"></div>
+  <div id="place">📍 Finding you…</div>
   <div id="emoji">⏳</div>
   <div id="verdict">Checking the sky…</div>
   <div id="detail"></div>
@@ -48,7 +52,41 @@
 // ---------- Settings you can change ----------
 const MORNING = [7, 8];    // hours of your ride to work (24-hour clock)
 const EVENING = [17, 18];  // hours of your ride home
-const FALLBACK = { lat: -40.88, lon: 175.06 }; // used if phone location is unavailable
+const FALLBACK = { lat: -40.88, lon: 175.07, name: "Waikanae (default)" }; // used if phone location is unavailable
+const SWITCH_HOUR = 19;    // from 7pm onwards, show tomorrow's forecast
+
+// Work out which day to forecast: today, or tomorrow if it's evening
+const forecastDay = new Date();
+const isTomorrow = forecastDay.getHours() >= SWITCH_HOUR;
+if (isTomorrow) forecastDay.setDate(forecastDay.getDate() + 1);
+
+// The forecast day as text like "2026-09-27", to match Open-Meteo's times
+const pad = n => String(n).padStart(2, "0");
+const forecastDateText =
+  `${forecastDay.getFullYear()}-${pad(forecastDay.getMonth() + 1)}-${pad(forecastDay.getDate())}`;
+
+// Show the forecast day's date and which day of the year it is
+function showDate() {
+  const d = forecastDay;
+  const pretty = d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  const thisDay = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const jan1 = Date.UTC(d.getFullYear(), 0, 1);
+  const dayOfYear = (thisDay - jan1) / 86400000 + 1;   // 86,400,000 milliseconds in a day
+  const label = isTomorrow ? "Tomorrow: " : "Today: ";
+  document.getElementById("date").textContent = `${label}${pretty} · Day ${dayOfYear}`;
+}
+
+// Turn coordinates into a place name, e.g. "Riccarton"
+async function getPlaceName(lat, lon) {
+  try {
+    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client` +
+                            `?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+    const place = await res.json();
+    return place.locality || place.city || "your area";
+  } catch {
+    return `${lat.toFixed(2)}, ${lon.toFixed(2)}`;   // if it fails, just show the numbers
+  }
+}
 
 // Ask the phone where it is; fall back to FALLBACK if that fails
 function getLocation() {
@@ -63,11 +101,19 @@ function getLocation() {
 }
 
 async function checkRain() {
-  const { lat, lon } = await getLocation();
+  const { lat, lon, name } = await getLocation();
+
+  // Show the place name (without waiting for it before getting the forecast)
+  const placeBox = document.getElementById("place");
+  if (name) {
+    placeBox.textContent = "📍 " + name;
+  } else {
+    getPlaceName(lat, lon).then(found => placeBox.textContent = "📍 " + found);
+  }
 
   // Open-Meteo: a free weather service, no account needed
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-              `&hourly=precipitation_probability&timezone=auto&forecast_days=1`;
+              `&hourly=precipitation_probability&timezone=auto&forecast_days=2`;   // today and tomorrow
   const res = await fetch(url);
   if (!res.ok) throw new Error("Forecast unavailable");
   const data = await res.json();
@@ -79,6 +125,7 @@ async function checkRain() {
   let worst = 0;
   let rows = "";
   times.forEach((t, i) => {
+    if (!t.startsWith(forecastDateText)) return;       // skip hours from the other day
     const hour = Number(t.slice(11, 13));
     if (hour < 6 || hour > 20) return;                 // only show 6am to 8pm
     const p = probs[i] ?? 0;
@@ -93,9 +140,9 @@ async function checkRain() {
 
   // The decision
   let emoji, verdict;
-  if (worst < 20)      { emoji = "🏍️"; verdict = "Ride today!"; }
+  if (worst < 20)      { emoji = "🏍️"; verdict = "Clear skies – get the bike out!"; }
   else if (worst < 50) { emoji = "🌦️"; verdict = "It may rain – use waterproofs"; }
-  else                 { emoji = "🌧️"; verdict = "Rain likely – work from home"; }
+  else                 { emoji = "🏠"; verdict = "Rain likely – work from home"; }
 
   document.getElementById("emoji").textContent = emoji;
   document.getElementById("verdict").textContent = verdict;
@@ -106,6 +153,7 @@ async function checkRain() {
     " · Bold rows are your ride times · Forecast by Open-Meteo";
 }
 
+showDate();
 checkRain().catch(() => {
   document.getElementById("emoji").textContent = "⚠️";
   document.getElementById("verdict").textContent = "Couldn't get the forecast";
