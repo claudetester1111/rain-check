@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rain Check">
+<title>Rain Check</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px 16px;
+         background: #f4f6f8; color: #1d2530; text-align: center; }
+  .card { background: #fff; border-radius: 16px; padding: 20px; margin: 0 auto 16px;
+          max-width: 420px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  #emoji { font-size: 72px; }
+  #verdict { font-size: 28px; font-weight: 700; margin: 8px 0; }
+  #detail { opacity: .75; }
+  table { width: 100%; border-collapse: collapse; text-align: left; }
+  td { padding: 4px 0; font-size: 15px; }
+  td.time { width: 60px; }
+  td.pct { width: 48px; text-align: right; }
+  .bar-bg { background: #e3e8ee; border-radius: 4px; height: 10px; margin: 0 8px; }
+  .bar { background: #3b82f6; height: 10px; border-radius: 4px; }
+  tr.ride td { font-weight: 700; }
+  small { opacity: .6; }
+  /* Dark mode: follows your phone's setting */
+  @media (prefers-color-scheme: dark) {
+    body { background: #12161c; color: #e8edf2; }
+    .card { background: #1c232c; }
+    .bar-bg { background: #2a333e; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div id="emoji">⏳</div>
+  <div id="verdict">Checking the sky…</div>
+  <div id="detail"></div>
+</div>
+
+<div class="card">
+  <table id="hours"></table>
+</div>
+
+<small id="updated"></small>
+
+<script>
+// ---------- Settings you can change ----------
+const MORNING = [7, 8];    // hours of your ride to work (24-hour clock)
+const EVENING = [16, 17];  // hours of your ride home
+const FALLBACK = { lat: -43.53, lon: 172.64 }; // used if phone location is unavailable
+
+// Ask the phone where it is; fall back to FALLBACK if that fails
+function getLocation() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(FALLBACK);
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => resolve(FALLBACK),
+      { timeout: 8000, maximumAge: 3600000 }
+    );
+  });
+}
+
+async function checkRain() {
+  const { lat, lon } = await getLocation();
+
+  // Open-Meteo: a free weather service, no account needed
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+              `&hourly=precipitation_probability&timezone=auto&forecast_days=1`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Forecast unavailable");
+  const data = await res.json();
+
+  const times = data.hourly.time;                      // e.g. "2026-09-27T07:00"
+  const probs = data.hourly.precipitation_probability; // chance of rain, 0-100
+  const rideHours = [...MORNING, ...EVENING];
+
+  let worst = 0;
+  let rows = "";
+  times.forEach((t, i) => {
+    const hour = Number(t.slice(11, 13));
+    if (hour < 6 || hour > 20) return;                 // only show 6am to 8pm
+    const p = probs[i] ?? 0;
+    const isRide = rideHours.includes(hour);
+    if (isRide) worst = Math.max(worst, p);
+    rows += `<tr class="${isRide ? "ride" : ""}">
+      <td class="time">${hour}:00</td>
+      <td><div class="bar-bg"><div class="bar" style="width:${p}%"></div></div></td>
+      <td class="pct">${p}%</td></tr>`;
+  });
+  document.getElementById("hours").innerHTML = rows;
+
+  // The decision
+  let emoji, verdict;
+  if (worst < 20)      { emoji = "🏍️"; verdict = "Ride today!"; }
+  else if (worst < 50) { emoji = "🌦️"; verdict = "Maybe – pack waterproofs"; }
+  else                 { emoji = "🌧️"; verdict = "Rain likely – take the car"; }
+
+  document.getElementById("emoji").textContent = emoji;
+  document.getElementById("verdict").textContent = verdict;
+  document.getElementById("detail").textContent =
+    `Highest chance of rain during your rides: ${worst}%`;
+  document.getElementById("updated").textContent =
+    "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) +
+    " · Bold rows are your ride times · Forecast by Open-Meteo";
+}
+
+checkRain().catch(() => {
+  document.getElementById("emoji").textContent = "⚠️";
+  document.getElementById("verdict").textContent = "Couldn't get the forecast";
+  document.getElementById("detail").textContent = "Check your internet connection and reload.";
+});
+</script>
+</body>
+</html>
