@@ -47,8 +47,8 @@
 <script>
 // ---------- Settings you can change ----------
 const MORNING = [7, 8];    // hours of your ride to work (24-hour clock)
-const EVENING = [16, 17];  // hours of your ride home
-const FALLBACK = { lat: -43.53, lon: 172.64 }; // used if phone location is unavailable
+const EVENING = [17, 18];  // hours of your ride home
+const FALLBACK = { lat: -40.88, lon: 175.06 }; // used if phone location is unavailable
 
 // Ask the phone where it is; fall back to FALLBACK if that fails
 function getLocation() {
@@ -94,8 +94,8 @@ async function checkRain() {
   // The decision
   let emoji, verdict;
   if (worst < 20)      { emoji = "🏍️"; verdict = "Ride today!"; }
-  else if (worst < 50) { emoji = "🌦️"; verdict = "Maybe – pack waterproofs"; }
-  else                 { emoji = "🌧️"; verdict = "Rain likely – take the car"; }
+  else if (worst < 50) { emoji = "🌦️"; verdict = "it may rain – use waterproofs"; }
+  else                 { emoji = "🌧️"; verdict = "Rain likely – work from home"; }
 
   document.getElementById("emoji").textContent = emoji;
   document.getElementById("verdict").textContent = verdict;
