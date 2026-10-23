@@ -20,7 +20,7 @@
   td { padding: 4px 0; font-size: 15px; }
   td.time { width: 60px; }
   td.pct { width: 48px; text-align: right; }
-  td.mm { width: 64px; text-align: right; }
+  td.mm { width: 40px; text-align: right; }
   th { font-size: 12px; font-weight: 600; opacity: .6; padding-bottom: 6px; }
   th.right { text-align: right; }
   .bar-bg { background: #e3e8ee; border-radius: 4px; height: 10px; margin: 0 8px; }
@@ -127,7 +127,7 @@ async function checkRain() {
   const rideHours = [...MORNING, ...EVENING];
 
   let worst = 0;
-  let rows = `<tr><th>Time</th><th>Chance of rain</th><th class="right">%</th><th class="right">mm</th></tr>`;
+  let rows = `<tr><th>Time</th><th class="right">mm</th><th>Likelihood</th><th class="right">%</th></tr>`;
   times.forEach((t, i) => {
     if (!t.startsWith(forecastDateText)) return;       // skip hours from the other day
     const hour = Number(t.slice(11, 13));
@@ -138,9 +138,9 @@ async function checkRain() {
     if (isRide) worst = Math.max(worst, p);
     rows += `<tr class="${isRide ? "ride" : ""}">
       <td class="time">${hour}:00</td>
+      <td class="mm">${mm.toFixed(1)}</td>
       <td><div class="bar-bg"><div class="bar" style="width:${p}%"></div></div></td>
-      <td class="pct">${p}%</td>
-      <td class="mm">${mm.toFixed(1)}</td></tr>`;
+      <td class="pct">${p}%</td></tr>`;
   });
   document.getElementById("hours").innerHTML = rows;
 
