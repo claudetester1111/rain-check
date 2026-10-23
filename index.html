@@ -20,6 +20,9 @@
   td { padding: 4px 0; font-size: 15px; }
   td.time { width: 60px; }
   td.pct { width: 48px; text-align: right; }
+  td.mm { width: 64px; text-align: right; }
+  th { font-size: 12px; font-weight: 600; opacity: .6; padding-bottom: 6px; }
+  th.right { text-align: right; }
   .bar-bg { background: #e3e8ee; border-radius: 4px; height: 10px; margin: 0 8px; }
   .bar { background: #3b82f6; height: 10px; border-radius: 4px; }
   tr.ride td { font-weight: 700; }
@@ -113,28 +116,31 @@ async function checkRain() {
 
   // Open-Meteo: a free weather service, no account needed
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-              `&hourly=precipitation_probability&timezone=auto&forecast_days=2`;   // today and tomorrow
+              `&hourly=precipitation_probability,precipitation&timezone=auto&forecast_days=2`;   // today and tomorrow
   const res = await fetch(url);
   if (!res.ok) throw new Error("Forecast unavailable");
   const data = await res.json();
 
   const times = data.hourly.time;                      // e.g. "2026-09-27T07:00"
   const probs = data.hourly.precipitation_probability; // chance of rain, 0-100
+  const rain  = data.hourly.precipitation;             // expected rain in mm
   const rideHours = [...MORNING, ...EVENING];
 
   let worst = 0;
-  let rows = "";
+  let rows = `<tr><th>Time</th><th>Chance of rain</th><th class="right">%</th><th class="right">Rain</th></tr>`;
   times.forEach((t, i) => {
     if (!t.startsWith(forecastDateText)) return;       // skip hours from the other day
     const hour = Number(t.slice(11, 13));
     if (hour < 6 || hour > 20) return;                 // only show 6am to 8pm
     const p = probs[i] ?? 0;
+    const mm = rain[i] ?? 0;
     const isRide = rideHours.includes(hour);
     if (isRide) worst = Math.max(worst, p);
     rows += `<tr class="${isRide ? "ride" : ""}">
       <td class="time">${hour}:00</td>
       <td><div class="bar-bg"><div class="bar" style="width:${p}%"></div></div></td>
-      <td class="pct">${p}%</td></tr>`;
+      <td class="pct">${p}%</td>
+      <td class="mm">${mm.toFixed(1)} mm</td></tr>`;
   });
   document.getElementById("hours").innerHTML = rows;
 
