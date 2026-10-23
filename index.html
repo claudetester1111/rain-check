@@ -127,7 +127,7 @@ async function checkRain() {
   const rideHours = [...MORNING, ...EVENING];
 
   let worst = 0;
-  let rows = `<tr><th>Time</th><th class="right">mm</th><th>Likelihood</th><th class="right">%</th></tr>`;
+  let rows = `<tr><th>Time</th><th class="right">mm</th><th class="right">Likelihood</th><th class="right">%</th></tr>`;
   times.forEach((t, i) => {
     if (!t.startsWith(forecastDateText)) return;       // skip hours from the other day
     const hour = Number(t.slice(11, 13));
