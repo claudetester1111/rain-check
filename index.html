@@ -57,13 +57,14 @@ const MORNING = [7, 8];    // hours of your ride to work (24-hour clock)
 const EVENING = [17, 18];  // hours of your ride home
 const FALLBACK = { lat: -40.88, lon: 175.07, name: "Waikanae (default)" }; // used if phone location is unavailable
 const SWITCH_HOUR = 19;    // from 7pm onwards, show tomorrow's forecast
+const WEATHERAPI_KEY = "029aab996f564441b0a103327261811";  // your free key from weatherapi.com
 
 // Work out which day to forecast: today, or tomorrow if it's evening
 const forecastDay = new Date();
 const isTomorrow = forecastDay.getHours() >= SWITCH_HOUR;
 if (isTomorrow) forecastDay.setDate(forecastDay.getDate() + 1);
 
-// The forecast day as text like "2026-09-27", to match Open-Meteo's times
+// The forecast day as text like "2026-09-27", to match the forecast times
 const pad = n => String(n).padStart(2, "0");
 const forecastDateText =
   `${forecastDay.getFullYear()}-${pad(forecastDay.getMonth() + 1)}-${pad(forecastDay.getDate())}`;
@@ -103,6 +104,53 @@ function getLocation() {
   });
 }
 
+// ---------- Weather services ----------
+// Each one returns the same shape, so the rest of the app doesn't care which was used:
+// { source, times: ["2026-11-19T07:00", ...], probs: [chance %], rain: [mm] }
+
+// Main service: WeatherAPI.com (free account and key)
+async function fromWeatherAPI(lat, lon) {
+  if (WEATHERAPI_KEY.startsWith("PASTE")) throw new Error("No WeatherAPI key yet");
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${WEATHERAPI_KEY}` +
+              `&q=${lat},${lon}&days=2`;                           // today and tomorrow
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });  // give up after 8 seconds
+  if (!res.ok) throw new Error("WeatherAPI unavailable");
+  const data = await res.json();
+
+  const hours = data.forecast.forecastday.flatMap(day => day.hour);   // both days, joined into one list
+  return {
+    source: "WeatherAPI.com",
+    times: hours.map(h => h.time.replace(" ", "T")),   // "2026-11-19 07:00" -> "2026-11-19T07:00"
+    probs: hours.map(h => h.chance_of_rain),
+    rain:  hours.map(h => h.precip_mm),
+  };
+}
+
+// Backup service: Open-Meteo (no key needed, but sometimes down)
+async function fromOpenMeteo(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+              `&hourly=precipitation_probability,precipitation&timezone=auto&forecast_days=2`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error("Open-Meteo unavailable");
+  const data = await res.json();
+  return {
+    source: "Open-Meteo",
+    times: data.hourly.time,
+    probs: data.hourly.precipitation_probability,
+    rain:  data.hourly.precipitation,
+  };
+}
+
+// Try the main service first; if it fails, try the backup
+async function getForecast(lat, lon) {
+  try {
+    return await fromWeatherAPI(lat, lon);
+  } catch (problem) {
+    console.log("WeatherAPI failed, trying Open-Meteo:", problem.message);
+    return await fromOpenMeteo(lat, lon);
+  }
+}
+
 async function checkRain() {
   const { lat, lon, name } = await getLocation();
 
@@ -114,16 +162,7 @@ async function checkRain() {
     getPlaceName(lat, lon).then(found => placeBox.textContent = "📍 " + found);
   }
 
-  // Open-Meteo: a free weather service, no account needed
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-              `&hourly=precipitation_probability,precipitation&timezone=auto&forecast_days=2`;   // today and tomorrow
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Forecast unavailable");
-  const data = await res.json();
-
-  const times = data.hourly.time;                      // e.g. "2026-09-27T07:00"
-  const probs = data.hourly.precipitation_probability; // chance of rain, 0-100
-  const rain  = data.hourly.precipitation;             // expected rain in mm
+  const { source, times, probs, rain } = await getForecast(lat, lon);
   const rideHours = [...MORNING, ...EVENING];
 
   let worst = 0;
@@ -156,14 +195,14 @@ async function checkRain() {
     `Highest chance of rain during your rides: ${worst}%`;
   document.getElementById("updated").textContent =
     "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) +
-    " · Bold rows are your ride times · Forecast by Open-Meteo";
+    " · Bold rows are your ride times · Forecast by " + source;
 }
 
 showDate();
 checkRain().catch(() => {
   document.getElementById("emoji").textContent = "⚠️";
   document.getElementById("verdict").textContent = "Couldn't get the forecast";
-  document.getElementById("detail").textContent = "Check your internet connection and reload.";
+  document.getElementById("detail").textContent = "Both weather services failed. Check your internet connection and reload.";
 });
 </script>
 </body>
